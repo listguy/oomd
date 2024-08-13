@@ -17,6 +17,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 namespace Oomd {
 
@@ -49,8 +50,8 @@ int process_madvise(
 }
 
 int FreezePlugin::init(
-    const Engine::PluginArgs& args,
-    const PluginConstructionContext& context) {
+  const Engine::PluginArgs& args,
+  const PluginConstructionContext& context) {
   createFreezer();
   createFreezeCgroup();
   return BaseKillPlugin::init(args, context);
@@ -60,9 +61,9 @@ int FreezePlugin::tryToKillPids(const std::vector<int>& procs) {
   for (auto pid : procs) {
     handleProcess(pid);
   }
-  std::string pathToCgroup = "/sys/fs/cgroup/bench.slice/bench-nas.slice"; //TODO: change to parsed argument
+  const std::string pathToCgroup = "/sys/fs/cgroup/bench.slice/bench-nas.slice"; //TODO: change to parsed argument
   
-  memoryReclaimCgroup(pathToCgroup);
+  performMemoryReclaimAndNotify(pathToCgroup);
   return 0;
 }
 
@@ -105,7 +106,7 @@ bool FreezePlugin::createFreezeCgroup(void) {
   return true;
 }
 
-void FreezePlugin::memoryReclaimCgroup(std::string& pathToCgroup) {
+void FreezePlugin::memoryReclaimCgroup(const std::string& pathToCgroup) {
   // writeToFile(pathToCgroup + "/memory.reclaim", RECLAIM);
   auto cgroupDirFd = Fs::DirFd::open(pathToCgroup);
   if(!cgroupDirFd) {
@@ -121,6 +122,13 @@ void FreezePlugin::memoryReclaimCgroup(std::string& pathToCgroup) {
   Fs::writeMemReclaimAt(cgroupDirFd.value() ,toReclaim.value(), std::nullopt);
 }
 
+void FreezePlugin::performMemoryReclaimAndNotify(const std::string& pathToCgroup) {
+    std::thread([this,pathToCgroup]() {
+        memoryReclaimCgroup(pathToCgroup);
+        
+        OLOG << "Memory reclaim operation completed for cgroup: " << pathToCgroup;
+    }).detach(); // Detach the thread to avoid blocking
+}
 void FreezePlugin::freezeProcess(int pid) {
   // Add the process to the cgroup
   if (pid <= 0) {

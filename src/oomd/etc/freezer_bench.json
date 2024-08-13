@@ -4,12 +4,12 @@
             "name": "test freezer",
             "detectors": [
                 [
-                    "memory above 20% for 1 second",
+                    "memory above 10% for 1 second",
                     {
                         "name": "memory_above",
                         "args": {
                             "cgroup": "bench.slice",
-                            "threshold": "20%",
+                            "threshold": "10%",
                             "duration": "1"
                         }
                     }
@@ -25,7 +25,8 @@
                 {
                     "name": "unfreeze",
                     "args": {
-                        "cgroup": "freezer/my_freezer"
+                        "cgroup": "freezer/my_freezer",
+                        "monitor_cgroup": "bench.slice"
                     }
                 }
             ]

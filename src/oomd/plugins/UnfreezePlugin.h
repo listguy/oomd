@@ -39,10 +39,11 @@ class UnfreezePlugin : public BaseKillPlugin {
       const std::vector<OomdContext::ConstCgroupContextRef>& peers) override;
 
   std::vector<MemoryRegion> getSwappedRegions(pid_t pid);
-
+  long long readCgroupFile(const std::string& path);
   void unfreezeProcess(int pid);
 
   void pageInMemory(int pid);
+  std::string monitor_cgroup_;
 };
 
 } // namespace Oomd

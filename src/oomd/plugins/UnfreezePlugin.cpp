@@ -33,24 +33,24 @@ REGISTER_PLUGIN(unfreeze, UnfreezePlugin::create);
 int UnfreezePlugin::init(
     const Engine::PluginArgs& args,
     const PluginConstructionContext& context) {
+    argParser_.addArgument("monitor_cgroup", monitor_cgroup_, true);
   return BaseKillPlugin::init(args, context);
 }
 
 Engine::PluginRet UnfreezePlugin::run(OomdContext& ctx) {
-  struct sysinfo memInfo;
-  sysinfo(&memInfo);
+  const std::string cgroupPath = "/sys/fs/cgroup/" + monitor_cgroup_;
 
-  long long totalMemory = memInfo.totalram;
-  totalMemory *= memInfo.mem_unit;
+    // Read current memory usage
+    long long memoryCurrent = readCgroupFile(cgroupPath + "/memory.current");
+    
+    // Read maximum memory limit
+    long long memoryMax = readCgroupFile(cgroupPath + "/memory.max");
 
-  long long freeMemory = memInfo.freeram;
-  freeMemory *= memInfo.mem_unit;
-
-  double freeMemoryPercentage = (double)freeMemory / totalMemory * 100.0;
+  double usedMemory = (double)memoryCurrent / memoryMax * 100.0;
 
   // If free memory is above 70%, return ASYNC_PAUSED
-  if (freeMemoryPercentage < 30.0) {
-    OLOG << "Free memory is above 30% (" << freeMemoryPercentage
+  if (usedMemory > 20.0) {
+    OLOG << "Used memory is above 70% (" << usedMemory
          << "%), pausing...";
     return Engine::PluginRet::ASYNC_PAUSED;
   }
@@ -79,8 +79,6 @@ void UnfreezePlugin::ologKillTarget(
     OomdContext& ctx,
     const CgroupContext& target,
     const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {
-  OLOG << "Prefetched memory and unfreezed \""
-       << target.cgroup().relativePath();
 }
 
 std::vector<MemoryRegion> UnfreezePlugin::getSwappedRegions(pid_t pid) {
@@ -157,10 +155,7 @@ void UnfreezePlugin::pageInMemory(int pid) {
       std::ostringstream oss;
       oss << "process_madvise failed for region " << std::hex << region.start << "-" << region.end << ": " << strerror(errno);
       logError(oss.str());
-    } else {
-      OLOG << "Memory region " << std::hex << region.start << "-"
-                << region.end << " advised successfully.";
-    }
+    } 
     close(pidfd);
   }
 }
@@ -180,6 +175,18 @@ void UnfreezePlugin::unfreezeProcess(int pid) {
   char state_path[256];
   snprintf(state_path, sizeof(state_path), "%s/freezer.state", MY_FREEZER_PATH);
   writeToFile(state_path, "THAWED");
+}
+
+long long UnfreezePlugin::readCgroupFile(const std::string& path) {
+    std::ifstream file(path);
+    long long value = -1;
+    if (file.is_open()) {
+        file >> value;
+        file.close();
+    } else {
+      logError("Failed to open ");
+    }
+    return value;
 }
 
 } // namespace Oomd
