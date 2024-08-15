@@ -48,9 +48,9 @@ Engine::PluginRet UnfreezePlugin::run(OomdContext& ctx) {
 
   double usedMemory = (double)memoryCurrent / memoryMax * 100.0;
 
-  // If free memory is above 70%, return ASYNC_PAUSED
+  // If used memory is above 20%, return ASYNC_PAUSED
   if (usedMemory > 20.0) {
-    OLOG << "Used memory is above 70% (" << usedMemory
+    OLOG << "Used memory is above 20% (" << usedMemory
          << "%), pausing...";
     return Engine::PluginRet::ASYNC_PAUSED;
   }

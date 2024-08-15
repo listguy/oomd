@@ -219,11 +219,11 @@ Failed partial verification: iteration 100, processor 0, test key 4, key rank 13
  Class           =                        C
  Size            =                134217728
  Iterations      =                      100
- Time in seconds =                    98.47
+ Time in seconds =                   147.12
  Total processes =                        1
  Active processes=                        1
- Mop/s total     =                   136.30
- Mop/s/process   =                   136.30
+ Mop/s total     =                    91.23
+ Mop/s/process   =                    91.23
  Operation type  =              keys ranked
  Verification    =             UNSUCCESSFUL
  Version         =                    3.4.2

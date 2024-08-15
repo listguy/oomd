@@ -2,8 +2,9 @@
 #include <vector>
 #include <unordered_set>
 #include "oomd/plugins/BasePlugin.h"
-
 #include <chrono>
+
+#define UNFREEZE
 
 namespace Oomd {
 

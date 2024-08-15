@@ -40,7 +40,7 @@ int NewUnfreezePlugin::init(
         return PluginArgParser::parseCgroup(context, cgroupStr);
       },
       true);
-        if (!argParser_.parse(args)) {
+  if (!argParser_.parse(args)) {
     return 1;
   }
   return 0;
@@ -64,53 +64,55 @@ Engine::PluginRet NewUnfreezePlugin::run(OomdContext& ctx) {
          << "%), pausing...";
     return Engine::PluginRet::ASYNC_PAUSED;
   }
-  
+
   for (const auto& cgroupPath : cgroups_) {
     std::string path = cgroupPath.absolutePath();
 
     // Create a thread for each cgroup path and detach it
     std::thread([this, path]() {
       processCgroup(path);
-    }).detach();  // Detach the thread so it runs independently
+    }).detach(); // Detach the thread so it runs independently
   }
 
   return Engine::PluginRet::CONTINUE;
 }
 
-// int NewUnfreezePlugin::tryToKillPids(const std::vector<int>& procs) {
-//   for (auto pid : procs) {
-//     pageInMemory(pid);
-//     unfreezeProcess(pid);
-//     OLOG << "Prefetched memory and unfreezed process " << pid;
-//   }
-//   return 0;
-// }
-
-// std::vector<OomdContext::ConstCgroupContextRef> NewUnfreezePlugin::rankForKilling(
-//     OomdContext& ctx,
-//     const std::vector<OomdContext::ConstCgroupContextRef>& cgroups) {
-//   return OomdContext::sortDescWithKillPrefs(
-//       cgroups, [this](const CgroupContext& cgroup_ctx) {
-//         return cgroup_ctx.current_usage().value_or(0);
-//       });
-// }
-
-// void NewUnfreezePlugin::ologKillTarget(
-//     OomdContext& ctx,
-//     const CgroupContext& target,
-//     const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {
-//   OLOG << "Prefetched memory and unfreezed \""
-//        << target.cgroup().relativePath();
-// }
-
 void processCgroup(const std::string& cgroupPath) {
-  /*
-  read pids
-  then for each pid:
-    pageInMemory() in different thread?
-  unfreezeCgroup()
-  */
+  std::vector<int> pids;
+  const std::string procsFilePath = cgroupPath + "/cgroup.procs";
 
+  // Open the cgroup.procs file
+  std::ifstream file(procsFilePath);
+  if (!file) {
+    std::cerr << "Failed to open " << procsFilePath << std::endl;
+    return pids;
+  }
+
+  // Read each line (PID) and add it to the vector
+  int pid;
+  while (file >> pid) {
+    pids.push_back(pid);
+  }
+
+  for (int pid : pids) {
+    pageInMemory(pid);
+  }
+  unfreezeCgroup();
+}
+
+void NewUnfreezePlugin::unfreezeCgroup(const std::string& cgroupPath) {
+  std::string freezeFilePath = cgroupPath + "/cgroup.freeze";
+  std::ofstream freezeFile(freezeFilePath);
+  
+  if (!freezeFile.is_open()) {
+    logError("Error opening freeze file: " + freezeFilePath);
+    return;
+  }
+
+  freezeFile << UNFREEZE;
+  freezeFile.close();
+
+  OLOG << "Unfroze cgroup: " << cgroupPath;
 }
 
 std::vector<MemoryRegion> NewUnfreezePlugin::getSwappedRegions(pid_t pid) {
@@ -185,11 +187,12 @@ void NewUnfreezePlugin::pageInMemory(int pid) {
     int ret = syscall(SYS_process_madvise, pidfd, &iov, 1, MADV_WILLNEED, 0);
     if (ret == -1) {
       std::ostringstream oss;
-      oss << "process_madvise failed for region " << std::hex << region.start << "-" << region.end << ": " << strerror(errno);
+      oss << "process_madvise failed for region " << std::hex << region.start
+          << "-" << region.end << ": " << strerror(errno);
       logError(oss.str());
     } else {
-      OLOG << "Memory region " << std::hex << region.start << "-"
-                << region.end << " advised successfully.";
+      OLOG << "Memory region " << std::hex << region.start << "-" << region.end
+           << " advised successfully.";
     }
     close(pidfd);
   }

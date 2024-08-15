@@ -4,12 +4,12 @@
             "name": "test throttle",
             "detectors": [
                 [
-                    "memory above 20% for 1 second",
+                    "memory above 10% for 1 second",
                     {
                         "name": "memory_above",
                         "args": {
                             "cgroup": "bench.slice",
-                            "threshold": "20%",
+                            "threshold": "10%",
                             "duration": "1"
                         }
                     }
@@ -19,7 +19,7 @@
                 {
                     "name": "throttle",
                     "args": {
-                        "cgroup": "bench.slice/bench-nas.slice"
+                        "cgroup": "bench.slice/bench-redis.slice"
                     }
                 }
             ]

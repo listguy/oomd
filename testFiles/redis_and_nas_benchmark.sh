@@ -15,13 +15,17 @@ sudo ./stop_benchmark_services.sh
 EXECUTABLE_PATH="./bin/is.C.x"
 REDIS_CGROUP_RELATIVE_PATH=bench-redis # relative to cgroup mount point
 NAS_CGROUP_RELATIVE_PATH=bench-nas # relative to cgroup mount point
-MEMTIER_RUNTIME=20
+MEMTIER_RUNTIME=40
 WAIT_BETWEEN_TIME=10
-RESULTS_ABS_PATH="/home/guyy/oomd/testFiles/results"
+RESULTS_ABS_PATH="/home/guyy/oomd/testFiles/results_one_thread_6GB_bench"
 MEMTIER_DATA_SIZE=$((8 * 1024 * 1024))
 
 # make sure cgroups exist
 sudo ./init_cgroups.sh
+
+# clean swap
+sudo swapoff -a
+sudo swapon -a
 
 # Flush filesystem buffers
 sync
@@ -74,7 +78,7 @@ sudo systemd-run --slice=$NAS_CGROUP_RELATIVE_PATH --unit=nas-job \
     --property=StandardOutput=file:$RESULTS_ABS_PATH/nas_oomd_${OOMD_STATUS}_${TESTED_PLUGIN}.out \
     --property=StandardError=file:$RESULTS_ABS_PATH/nas_oomd_${OOMD_STATUS}_${TESTED_PLUGIN}.out \
     --remain-after-exit \
-    mpirun -np 4 ./bin/is.C.x
+    mpirun -np 1 ./bin/is.C.x
 
 
 # let it run for a while
@@ -88,8 +92,7 @@ sudo systemd-run --slice=$REDIS_CGROUP_RELATIVE_PATH --unit=memtier-job \
     --property=StandardOutput=file:$RESULTS_ABS_PATH/memtier_oomd_${OOMD_STATUS}_${TESTED_PLUGIN}.out \
     --property=StandardError=file:$RESULTS_ABS_PATH/memtier_oomd_${OOMD_STATUS}_${TESTED_PLUGIN}.out \
     --remain-after-exit \
-    memtier_benchmark -s 127.0.0.1 -p 6379 -c 50 -t 4 --test-time $MEMTIER_RUNTIME --pipeline=10 --data-size=$MEMTIER_DATA_SIZE
-
+    memtier_benchmark -s 127.0.0.1 -p 6379 -c 50 -t 1 --test-time $MEMTIER_RUNTIME --pipeline=10 --data-size=$MEMTIER_DATA_SIZE --key-maximum=10000000
 
 sudo systemctl wait nas-job  # Wait for the job to finish
 echo "NAS finished"

@@ -55,20 +55,20 @@ void ThrottleCgroup::changeLevel(int change) {
 }
 
 std::string ThrottleCgroup::getCurrentQuotaAndPeriod() {
-  int relativeQuota;
+  float relativeQuota;
 
   switch (level) {
     case 1:
-      relativeQuota = 0.75;
+      relativeQuota = 0.65;
       break;
     case 2:
-      relativeQuota = 0.5;
+      relativeQuota = 0.3;
       break;
     case 3:
-      relativeQuota = 0.25;
+      relativeQuota = 0.15;
       break;
     case MAX_LEVEL:
-      relativeQuota = 0.1;
+      relativeQuota = 0.05;
       break;
     default:
       relativeQuota = 1;
@@ -98,7 +98,7 @@ Engine::PluginRet ThrottleCgroup::run(OomdContext& ctx) {
   double usedMemoryPercentage = (double)usedMemory.value() / totalMemory.value() * 100.0;
 
   // if usage is high (low on memory)
-  if (usedMemoryPercentage > 70.0) {
+  if (usedMemoryPercentage > 30) {
     increaseLevel();
     OLOG << "low on memory, new throttle level: " << level << ", pausing...";
     return Engine::PluginRet::ASYNC_PAUSED;
@@ -113,7 +113,7 @@ Engine::PluginRet ThrottleCgroup::run(OomdContext& ctx) {
     }
     return Engine::PluginRet::ASYNC_PAUSED;
   }
-  return Engine::PluginRet::CONTINUE;
+    return Engine::PluginRet::ASYNC_PAUSED;
 };
 
 void ThrottleCgroup::throttle(
