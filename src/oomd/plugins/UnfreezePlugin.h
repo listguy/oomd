@@ -43,7 +43,8 @@ class UnfreezePlugin : public BaseKillPlugin {
   void unfreezeProcess(int pid);
 
   void pageInMemory(int pid);
-  std::string monitor_cgroup_;
+  std::string monitor_cgroup_path_ = "/sys/fs/cgroup/user.slice";
+  float mem_to_unfreeze_in_precentage = 20;
 };
 
 } // namespace Oomd

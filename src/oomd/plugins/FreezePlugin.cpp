@@ -82,8 +82,7 @@ void FreezePlugin::ologKillTarget(
     const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {
   OLOG << "Freezed \"" << target.cgroup().relativePath() << "\" ("
        << target.current_usage().value_or(0) / 1024 / 1024
-       << "MB) based on swap usage at "
-       << target.swap_usage().value_or(0) / 1024 / 1024 << "MB;";
+       << "MB) based on memory usage usage";
 }
 
 void FreezePlugin::handleProcess(int pid) {

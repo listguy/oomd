@@ -26,7 +26,8 @@
                     "name": "unfreeze",
                     "args": {
                         "cgroup": "freezer/my_freezer",
-                        "monitor_cgroup": "bench.slice"
+                        "monitor_cgroup": "bench.slice",
+                        "mem_to_unfreeze_in_precentage": "20"
                     }
                 }
             ]

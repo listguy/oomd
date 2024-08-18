@@ -3,6 +3,7 @@
 #include "oomd/PluginRegistry.h"
 #include "oomd/include/Types.h"
 #include "oomd/util/FreezeUtills.h"
+#include "oomd/util/Fs.h"
 #include "oomd/util/Util.h"
 
 #include <linux/mman.h>
@@ -30,80 +31,25 @@ namespace Oomd {
 
 REGISTER_PLUGIN(new_unfreeze, NewUnfreezePlugin::create);
 
-int NewUnfreezePlugin::init(
-    const Engine::PluginArgs& args,
-    const PluginConstructionContext& context) {
-  argParser_.addArgumentCustom(
-      "cgroup",
-      cgroups_,
-      [context](const std::string& cgroupStr) {
-        return PluginArgParser::parseCgroup(context, cgroupStr);
-      },
-      true);
-  if (!argParser_.parse(args)) {
-    return 1;
-  }
-  return 0;
-}
+void NewUnfreezePlugin::ologKillTarget(
+    OomdContext& ctx,
+    const CgroupContext& target,
+    const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {}
 
-Engine::PluginRet NewUnfreezePlugin::run(OomdContext& ctx) {
-  struct sysinfo memInfo;
-  sysinfo(&memInfo);
-
-  long long totalMemory = memInfo.totalram;
-  totalMemory *= memInfo.mem_unit;
-
-  long long freeMemory = memInfo.freeram;
-  freeMemory *= memInfo.mem_unit;
-
-  double freeMemoryPercentage = (double)freeMemory / totalMemory * 100.0;
-
-  // If free memory is above 70%, return ASYNC_PAUSED
-  if (freeMemoryPercentage < 30.0) {
-    OLOG << "Free memory is above 30% (" << freeMemoryPercentage
-         << "%), pausing...";
-    return Engine::PluginRet::ASYNC_PAUSED;
-  }
-
-  for (const auto& cgroupPath : cgroups_) {
-    std::string path = cgroupPath.absolutePath();
-
-    // Create a thread for each cgroup path and detach it
-    std::thread([this, path]() {
-      processCgroup(path);
-    }).detach(); // Detach the thread so it runs independently
-  }
-
-  return Engine::PluginRet::CONTINUE;
-}
-
-void processCgroup(const std::string& cgroupPath) {
-  std::vector<int> pids;
-  const std::string procsFilePath = cgroupPath + "/cgroup.procs";
-
-  // Open the cgroup.procs file
-  std::ifstream file(procsFilePath);
-  if (!file) {
-    std::cerr << "Failed to open " << procsFilePath << std::endl;
-    return pids;
-  }
-
-  // Read each line (PID) and add it to the vector
-  int pid;
-  while (file >> pid) {
-    pids.push_back(pid);
-  }
-
-  for (int pid : pids) {
-    pageInMemory(pid);
-  }
-  unfreezeCgroup();
+std::vector<OomdContext::ConstCgroupContextRef>
+NewUnfreezePlugin::rankForKilling(
+    OomdContext& ctx,
+    const std::vector<OomdContext::ConstCgroupContextRef>& cgroups) {
+  return OomdContext::sortDescWithKillPrefs(
+      cgroups, [this](const CgroupContext& cgroup_ctx) {
+        return cgroup_ctx.current_usage().value_or(0);
+      });
 }
 
 void NewUnfreezePlugin::unfreezeCgroup(const std::string& cgroupPath) {
   std::string freezeFilePath = cgroupPath + "/cgroup.freeze";
   std::ofstream freezeFile(freezeFilePath);
-  
+
   if (!freezeFile.is_open()) {
     logError("Error opening freeze file: " + freezeFilePath);
     return;
@@ -198,21 +144,57 @@ void NewUnfreezePlugin::pageInMemory(int pid) {
   }
 }
 
-void NewUnfreezePlugin::unfreezeProcess(int pid) {
-  if (pid <= 0) {
-    logError("Invalid PID: " + std::to_string(pid));
-    return;
+int NewUnfreezePlugin::init(
+    const Engine::PluginArgs& args,
+    const PluginConstructionContext& context) {
+
+  argParser_.addArgumentCustom(
+      "monitor_cgroup",
+      monitor_cgroup_path_,
+      [](const std::string& cgroup) { return CGROUP_PATH_PREFIX + cgroup; },
+      true);
+
+  argParser_.addArgumentCustom(
+      "mem_to_unfreeze_in_precentage",
+      mem_to_unfreeze_in_precentage,
+      [](const std::string& str) { return std::stof(str); },
+      true);
+  BaseKillPlugin::init(args, context);
+  return 0;
+}
+
+Engine::PluginRet NewUnfreezePlugin::run(OomdContext& ctx) {
+  auto monitoredCgroupDirFd = Fs::DirFd::open(monitor_cgroup_path_);
+
+  auto totalMemory = Fs::readMemmaxAt(monitoredCgroupDirFd.value());
+
+  auto usedMemory = Fs::readMemcurrentAt(monitoredCgroupDirFd.value());
+
+  double usedMemoryPercentage =
+      (double)usedMemory.value() / totalMemory.value() * 100.0;
+
+  // If used memory is above treshold , return ASYNC_PAUSED
+  if (usedMemoryPercentage > mem_to_unfreeze_in_precentage) {
+    OLOG << "Used memory is above treshold (" << usedMemoryPercentage
+         << "%), pausing...";
+    return Engine::PluginRet::ASYNC_PAUSED;
   }
 
-  char tasks_path[256];
-  snprintf(tasks_path, sizeof(tasks_path), "%s/tasks", MY_FREEZER_PATH);
-  char pid_str[16];
-  snprintf(pid_str, sizeof(pid_str), "%d", pid);
-  writeToFile(tasks_path, pid_str);
-
-  char state_path[256];
-  snprintf(state_path, sizeof(state_path), "%s/freezer.state", MY_FREEZER_PATH);
-  writeToFile(state_path, "THAWED");
+  return BaseKillPlugin::run(ctx);
 }
+
+int NewUnfreezePlugin::tryToKillPids(const std::vector<int>& procs) {
+  for (auto pid : procs) {
+    pageInMemory(pid);
+    OLOG << "Prefetched memory" << pid;
+  }
+  return 0;
+}
+
+void NewUnfreezePlugin::reportKillCompletionToXattr(
+      const std::string& cgroupPath,
+      int numProcsKilled) {
+        unfreezeCgroup(cgroupPath);
+      }
 
 } // namespace Oomd

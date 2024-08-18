@@ -2,7 +2,7 @@
 
 #include <string>
 #include <unordered_set>
-#include "oomd/plugins/BaseKillPlugin.h"
+#include "oomd/engine/BasePlugin.h"
 #include "oomd/include/CgroupPath.h"
 #define RECLAIM "1"
 #define FREEZE "1"

@@ -33,25 +33,33 @@ REGISTER_PLUGIN(unfreeze, UnfreezePlugin::create);
 int UnfreezePlugin::init(
     const Engine::PluginArgs& args,
     const PluginConstructionContext& context) {
-    argParser_.addArgument("monitor_cgroup", monitor_cgroup_, true);
+    argParser_.addArgumentCustom(
+      "monitor_cgroup",
+      monitor_cgroup_path_,
+      [](const std::string& cgroup) { return CGROUP_PATH_PREFIX + cgroup; },
+      true);
+  
+  argParser_.addArgumentCustom(
+      "mem_to_unfreeze_in_precentage",
+      mem_to_unfreeze_in_precentage,
+      [](const std::string& str) { return std::stof(str); },
+      true);
   return BaseKillPlugin::init(args, context);
 }
 
 Engine::PluginRet UnfreezePlugin::run(OomdContext& ctx) {
-  const std::string cgroupPath = "/sys/fs/cgroup/" + monitor_cgroup_;
+  auto monitoredCgroupDirFd = Fs::DirFd::open(monitor_cgroup_path_);
 
-    // Read current memory usage
-    long long memoryCurrent = readCgroupFile(cgroupPath + "/memory.current");
-    
-    // Read maximum memory limit
-    long long memoryMax = readCgroupFile(cgroupPath + "/memory.max");
+  auto totalMemory = Fs::readMemmaxAt(monitoredCgroupDirFd.value());
 
-  double usedMemory = (double)memoryCurrent / memoryMax * 100.0;
+  auto usedMemory = Fs::readMemcurrentAt(monitoredCgroupDirFd.value());
 
-  // If used memory is above 20%, return ASYNC_PAUSED
-  if (usedMemory > 20.0) {
-    OLOG << "Used memory is above 20% (" << usedMemory
-         << "%), pausing...";
+  double usedMemoryPercentage =
+      (double)usedMemory.value() / totalMemory.value() * 100.0;
+
+  // If used memory is above treshold , return ASYNC_PAUSED
+  if (usedMemoryPercentage > mem_to_unfreeze_in_precentage) {
+    OLOG << "Used memory is above treshold (" << usedMemoryPercentage << "%), pausing...";
     return Engine::PluginRet::ASYNC_PAUSED;
   }
   return BaseKillPlugin::run(ctx);
@@ -78,8 +86,7 @@ std::vector<OomdContext::ConstCgroupContextRef> UnfreezePlugin::rankForKilling(
 void UnfreezePlugin::ologKillTarget(
     OomdContext& ctx,
     const CgroupContext& target,
-    const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {
-}
+    const std::vector<OomdContext::ConstCgroupContextRef>& /* unused */) {}
 
 std::vector<MemoryRegion> UnfreezePlugin::getSwappedRegions(pid_t pid) {
   std::vector<MemoryRegion> regions;
@@ -153,9 +160,10 @@ void UnfreezePlugin::pageInMemory(int pid) {
     int ret = syscall(SYS_process_madvise, pidfd, &iov, 1, MADV_WILLNEED, 0);
     if (ret == -1) {
       std::ostringstream oss;
-      oss << "process_madvise failed for region " << std::hex << region.start << "-" << region.end << ": " << strerror(errno);
+      oss << "process_madvise failed for region " << std::hex << region.start
+          << "-" << region.end << ": " << strerror(errno);
       logError(oss.str());
-    } 
+    }
     close(pidfd);
   }
 }
@@ -178,15 +186,15 @@ void UnfreezePlugin::unfreezeProcess(int pid) {
 }
 
 long long UnfreezePlugin::readCgroupFile(const std::string& path) {
-    std::ifstream file(path);
-    long long value = -1;
-    if (file.is_open()) {
-        file >> value;
-        file.close();
-    } else {
-      logError("Failed to open ");
-    }
-    return value;
+  std::ifstream file(path);
+  long long value = -1;
+  if (file.is_open()) {
+    file >> value;
+    file.close();
+  } else {
+    logError("Failed to open ");
+  }
+  return value;
 }
 
 } // namespace Oomd

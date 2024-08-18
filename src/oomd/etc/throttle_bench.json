@@ -19,7 +19,8 @@
                 {
                     "name": "throttle",
                     "args": {
-                        "cgroup": "bench.slice/bench-redis.slice"
+                        "throttle_cgroup": "bench.slice/bench-redis.slice",
+                        "monitor_cgroup" : "bench.slice"
                     }
                 }
             ]
