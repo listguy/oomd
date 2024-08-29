@@ -1,0 +1,29 @@
+{
+    "rulesets": [
+        {
+            "name": "test throttle",
+            "detectors": [
+                [
+                    "memory above 10% for 1 second",
+                    {
+                        "name": "memory_above",
+                        "args": {
+                            "cgroup": "bench.slice",
+                            "threshold": "10%",
+                            "duration": "1"
+                        }
+                    }
+                ]
+            ],
+            "actions": [
+                {
+                    "name": "throttle",
+                    "args": {
+                        "throttle_cgroup": "bench.slice/bench-redis.slice",
+                        "monitor_cgroup" : "bench.slice"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -42,6 +42,13 @@ srcs = files('''
     src/oomd/plugins/BaseKillPlugin.cpp
     src/oomd/plugins/ContinuePlugin.cpp
     src/oomd/plugins/StopPlugin.cpp
+    src/oomd/plugins/ThrottleCgroup.cpp
+    src/oomd/plugins/ChangeMadviseToDontNeed.cpp
+    src/oomd/plugins/ChangeMadviseToFree.cpp
+    src/oomd/plugins/NewFreezePlugin.cpp
+    src/oomd/plugins/NewUnfreezePlugin.cpp
+    src/oomd/plugins/FreezePlugin.cpp
+    src/oomd/plugins/UnfreezePlugin.cpp
     src/oomd/plugins/DummyPrekillHook.cpp
     src/oomd/plugins/DumpCgroupOverview.cpp
     src/oomd/plugins/DumpKillInfoNoOp.cpp
@@ -58,6 +65,7 @@ srcs = files('''
     src/oomd/plugins/KillSwapUsage.cpp
     src/oomd/plugins/KillPgScan.cpp
     src/oomd/plugins/KillPressure.cpp
+    src/oomd/util/FreezeUtills.cpp
     src/oomd/util/Fs.cpp
     src/oomd/util/Util.cpp
     src/oomd/util/PluginArgParser.cpp

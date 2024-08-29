@@ -4,10 +4,10 @@
 /tags
 
 node_modules
-
+/.vscode/
 lib/core/metadata.js
 lib/core/MetadataBlog.js
-
+src/.vscode/*
 website/translated_docs
 website/build/
 website/yarn.lock
